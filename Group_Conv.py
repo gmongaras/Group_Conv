@@ -5,7 +5,7 @@ import math
 
 # My Group Conv
 class Group_Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, sub_size, device=torch.device("cpu")):
+    def __init__(self, in_channels, out_channels, kernel_size, sub_size, padding=0, device=torch.device("cpu")):
         super(Group_Conv, self).__init__()
         
         assert sub_size <= in_channels, "The sub_size cannot be greater than the number of input channels"
@@ -15,6 +15,7 @@ class Group_Conv(nn.Module):
         if type(kernel_size) == int:
             kernel_size = (kernel_size, kernel_size)
         
+        self.padding = padding
         self.sub_size = sub_size
         self.inCh = in_channels
         self.outCh = out_channels
@@ -57,9 +58,16 @@ class Group_Conv(nn.Module):
         h = X.shape[-2] - self.kernel_height
         if self.kernel_height % 2 != 0:
             h += 1
+        h += self.padding*2
         w = X.shape[-1] - self.kernel_width
         if self.kernel_width % 2 != 0:
             w += 1
+        w += self.padding*2
+
+
+
+        # Pad the input (on two dimensions) before doing anything
+        X = torch.nn.functional.pad(X, (self.padding, self.padding, self.padding, self.padding), mode="constant", value=0)
             
             
             
@@ -96,3 +104,30 @@ class Group_Conv(nn.Module):
 
         # Reshape to output shape (batch_size, outCh, H, W)
         return X.reshape(X.shape[0], -1, h, w)
+    
+
+
+
+
+
+if __name__ == "__main__":
+    # Our input
+    inCh = 4
+    outCh = 8
+    L = W = 10
+    BS = 4
+    image = torch.rand(BS, inCh, L, W)
+
+    # Create a Sparse_Conv object
+    SC = Group_Conv(inCh, outCh, (5, 5), inCh, 1)
+
+    # Create a convolution 2d object
+    C = nn.Conv2d(inCh, outCh, (5, 5))
+
+    # Copy weights from SC to C
+    C.weight = nn.Parameter(SC.weights.squeeze().clone())
+    C.bias = nn.Parameter(SC.biases.squeeze().clone())
+
+    # Get the sparse and normal output
+    SC_out = SC(image)
+    C_out = C(image)

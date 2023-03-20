@@ -103,5 +103,3 @@ C.bias = nn.Parameter(SC.biases.squeeze().clone())
 # Get the sparse and normal output
 SC_out = SC(image)
 C_out = C(image)
-
-# The outputs should be the same
