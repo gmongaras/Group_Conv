@@ -5,7 +5,7 @@ import math
 
 # My Group Conv
 class Group_Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, sub_size, padding=0, device=torch.device("cpu")):
+    def __init__(self, in_channels, out_channels, kernel_size, sub_size, stride=1, padding=0, device=torch.device("cpu")):
         super(Group_Conv, self).__init__()
         
         assert sub_size <= in_channels, "The sub_size cannot be greater than the number of input channels"
@@ -14,8 +14,14 @@ class Group_Conv(nn.Module):
         # Convert kernel from int to tuple
         if type(kernel_size) == int:
             kernel_size = (kernel_size, kernel_size)
+
+        # Convert stride from int to tuple
+        if type(stride) == int:
+            stride = (stride, stride)
         
         self.padding = padding
+        self.stride_height = stride[0]
+        self.stride_width = stride[1]
         self.sub_size = sub_size
         self.inCh = in_channels
         self.outCh = out_channels
@@ -55,15 +61,8 @@ class Group_Conv(nn.Module):
             
             
         # Get the h/W output
-        h = X.shape[-2] - self.kernel_height
-        if self.kernel_height % 2 != 0:
-            h += 1
-        h += self.padding*2
-        w = X.shape[-1] - self.kernel_width
-        if self.kernel_width % 2 != 0:
-            w += 1
-        w += self.padding*2
-
+        h = (X.shape[2] + 2*self.padding - (self.kernel_height-1)-1)//self.stride_height + 1
+        w = (X.shape[3] + 2*self.padding - (self.kernel_width-1)-1)//self.stride_width + 1
 
 
         # Pad the input (on two dimensions) before doing anything
@@ -87,7 +86,7 @@ class Group_Conv(nn.Module):
         # X = torch.nn.functional.pad(input=X.unsqueeze(0), pad=(0,0,0,0,0,self.sub_size-1), mode="circular").squeeze(0)
         
         # Unfold image (batch_size, channels+sub_size-1, windows, kernel_height, kernel_width)
-        X = X.unfold(2, self.kernel_height, 1).unfold(3, self.kernel_width, 1)
+        X = X.unfold(2, self.kernel_height, self.stride_height).unfold(3, self.kernel_width, self.stride_width)
         X = X.contiguous().view(X.shape[0], X.shape[1], -1, self.kernel_height, self.kernel_width)
 
         # Let's unfold this tensor to be of shape (batch_size, outCh, windows, kernel_height, kernel_width, sub_size)
@@ -119,7 +118,7 @@ if __name__ == "__main__":
     image = torch.rand(BS, inCh, L, W)
 
     # Create a Sparse_Conv object
-    SC = Group_Conv(inCh, outCh, (5, 5), inCh, 1)
+    SC = Group_Conv(inCh, outCh, (5, 5), inCh, stride = 2, padding=1)
 
     # Create a convolution 2d object
     C = nn.Conv2d(inCh, outCh, (5, 5))
